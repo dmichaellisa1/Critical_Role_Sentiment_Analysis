@@ -1,0 +1,322 @@
+---
+title: "CR Data Cleaning"
+output: html_notebook
+---
+
+```{r}
+library(stringr)
+library(tidyr)
+library(tm)
+library(textstem)
+```
+
+```{r}
+load("TotalData.Rda")
+```
+
+```{r}
+UniqueNames <- unique(TotalData$PlayerName)
+
+# cleans up names with \n
+TotalData$PlayerName <- as.character(purrr::map(TotalData$PlayerName, 
+                ~{gsub(pattern = "\\n", replacement = "", x = .x)
+                })
+                )
+
+UniqueNames <- unique(TotalData$PlayerName)
+
+# Fix capitalized AND
+r <- 1
+for (i in 1 : length(TotalData$PlayerName)) {
+  # Search for "AND" in playername and add a second row to attribute both players
+  if (grepl(pattern = "AND", x = TotalData$PlayerName[r])) {
+    SecondPlayer <- str_extract(TotalData$PlayerName[r], "(?<=AND ).*")
+    newrow <- TotalData[r,]
+    newrow$PlayerName <- SecondPlayer
+    TotalData <- rbind(TotalData[1:r,],newrow,TotalData[-(1:r),])
+    TotalData$PlayerName[r] <- str_extract(TotalData$PlayerName[r], ".*(?= AND)")
+    r <- r + 2
+  } else {
+    r <- r + 1 
+    }
+}
+
+# Fix &
+r <- 1
+for (i in 1 : length(TotalData$PlayerName)) {
+  # Search for "AND" in playername and add a second row to attribute both players
+  if (grepl(pattern = "&", x = TotalData$PlayerName[r])) {
+    SecondPlayer <- str_extract(TotalData$PlayerName[r], "(?<=& ).*")
+    newrow <- TotalData[r,]
+    newrow$PlayerName <- SecondPlayer
+    TotalData <- rbind(TotalData[1:r,],newrow,TotalData[-(1:r),])
+    TotalData$PlayerName[r] <- str_extract(TotalData$PlayerName[r], ".*(?= &)")
+    r <- r + 2
+  } else {
+    r <- r + 1 
+    }
+}
+
+row.names(TotalData) <- NULL
+
+UniqueNames <- unique(TotalData$PlayerName)
+
+
+#make a backup
+TotalData.backup <- TotalData
+#TotalData <- TotalData.backup
+
+#UniqueNames
+
+### Fixing some unique issues: mostly continued paragraghs of Matt talking
+
+TotalData[246358,]$PlayerName <- "MATT"
+TotalData[246358,]$Text <- TotalData[246358,]$complete
+
+TotalData[246360,]$PlayerName <- "MATT"
+TotalData[246360,]$Text <- TotalData[246360,]$complete
+
+#drop duplicate rows made from accidental player names and : - Mostly continued from long statements by Matt
+TotalData <- TotalData[-c(246359, 246361), ]
+
+row.names(TotalData) <- NULL
+
+UniqueNames <- unique(TotalData$PlayerName)
+
+#UniqueNames
+
+#1
+TotalData[209983,]$PlayerName <- "MATT"
+TotalData[209983,]$Text <- TotalData[209983,]$complete
+
+#2
+TotalData[219557,]$PlayerName <- "MATT"
+TotalData[219557,]$Text <- TotalData[219557,]$complete
+TotalData <- TotalData[-c(219558), ]
+row.names(TotalData) <- NULL
+
+#3
+TotalData[246677,]$PlayerName <- "MATT"
+TotalData[246677,]$Text <- TotalData[246677,]$complete
+TotalData <- TotalData[-c(246678), ]
+row.names(TotalData) <- NULL
+
+#4
+TotalData[249211,]$PlayerName <- "MATT"
+TotalData[249211,]$Text <- TotalData[249211,]$complete
+TotalData <- TotalData[-c(249212), ]
+row.names(TotalData) <- NULL
+
+#5
+TotalData[249229,]$PlayerName <- "MATT"
+TotalData[249229,]$Text <- TotalData[249229,]$complete
+row.names(TotalData) <- NULL
+
+#6
+TotalData[252428,]$PlayerName <- "MATT"
+TotalData[252428,]$Text <- TotalData[252428,]$complete
+row.names(TotalData) <- NULL
+
+#8
+TotalData[255274,]$PlayerName <- "MATT"
+TotalData[255274,]$Text <- TotalData[255274,]$complete
+TotalData <- TotalData[-c(255275), ]
+row.names(TotalData) <- NULL
+
+#9
+TotalData[256109,]$PlayerName <- "MATT"
+TotalData[256109,]$Text <- TotalData[256109,]$complete
+TotalData <- TotalData[-c(256110), ]
+row.names(TotalData) <- NULL
+
+#10
+TotalData[261769,]$PlayerName <- "MATT"
+TotalData[261769,]$Text <- TotalData[261769,]$complete
+row.names(TotalData) <- NULL
+
+#11
+TotalData[416380,]$PlayerName <- "MATT"
+TotalData[416380,]$Text <- TotalData[416380,]$complete
+row.names(TotalData) <- NULL
+
+#12
+TotalData[446191,]$PlayerName <- "MATT"
+TotalData[446191,]$Text <- TotalData[446191,]$complete
+row.names(TotalData) <- NULL
+
+#13
+TotalData[449852,]$PlayerName <- "MARISHA"
+TotalData[449852,]$Text <- TotalData[449852,]$complete
+row.names(TotalData) <- NULL
+
+#another backup
+TotalData.Fix <- TotalData
+
+## Getting rid of "," in names
+# Based off of the unique names left, looks like we need to do it about 3 times
+for (time in 1:3) {
+  
+r <- 1 # Need a row counter because adding rows
+for (i in 1 : length(TotalData$PlayerName)) {
+
+  # Search for "," in playername and add a second row to attribute both players
+  if (grepl(pattern = ",", x = TotalData$PlayerName[r])) {
+    SecondPlayer <- str_extract(TotalData$PlayerName[r], "(?<=, ).*")
+    newrow <- TotalData[r,]
+    newrow$PlayerName <- SecondPlayer
+    TotalData <- rbind(TotalData[1:r,],newrow,TotalData[-(1:r),])
+    TotalData$PlayerName[r] <- str_extract(TotalData$PlayerName[r], "^([^,]+)")
+    r <- r + 2
+  } else {
+    r <- r + 1 
+    }
+}
+}
+
+row.names(TotalData) <- NULL
+
+## Need to run "and" removal 2 more times
+for (time in 1:2) {
+
+r <- 1 # Need a row counter because adding rows
+for (i in 1 : length(TotalData$PlayerName)) {
+
+  # Search for "and" in playername and add a second row to attribute both players
+  if (grepl(pattern = "and", x = TotalData$PlayerName[r])) {
+    SecondPlayer <- str_extract(TotalData$PlayerName[r], "(?<=and ).*")
+    newrow <- TotalData[r,]
+    newrow$PlayerName <- SecondPlayer
+    TotalData <- rbind(TotalData[1:r,],newrow,TotalData[-(1:r),])
+    TotalData$PlayerName[r] <- str_extract(TotalData$PlayerName[r], "^([^and]+)")
+    r <- r + 2
+  } else {
+    r <- r + 1 
+    }
+}
+}
+
+row.names(TotalData) <- NULL
+
+#Need to do 2 more comma runs. There is one line I missed
+for (time in 1:2) {
+  
+r <- 1 # Need a row counter because adding rows
+for (i in 1 : length(TotalData$PlayerName)) {
+
+  # Search for "," in playername and add a second row to attribute both players
+  if (grepl(pattern = ",", x = TotalData$PlayerName[r])) {
+    SecondPlayer <- str_extract(TotalData$PlayerName[r], "(?<=, ).*")
+    newrow <- TotalData[r,]
+    newrow$PlayerName <- SecondPlayer
+    TotalData <- rbind(TotalData[1:r,],newrow,TotalData[-(1:r),])
+    TotalData$PlayerName[r] <- str_extract(TotalData$PlayerName[r], "^([^,]+)")
+    r <- r + 2
+  } else {
+    r <- r + 1 
+    }
+}
+}
+
+row.names(TotalData) <- NULL
+
+#Fixing a name typo from the transcript
+TotalData[63921,]$PlayerName <- "MATT"
+
+row.names(TotalData) <- NULL
+
+#get rid of blanks
+TotalData <- TotalData[!(TotalData$PlayerName == ""),]
+row.names(TotalData) <- NULL
+
+#Remove the NA's
+TotalData <- na.omit(TotalData)
+
+# made for a backup for testing
+TotalData.Clean <- TotalData
+
+# Put everything in uppercase and strip the blanks
+for (i in 1:length(TotalData.Clean$PlayerName)) {
+ TotalData.Clean$PlayerName[i] <- toupper(TotalData.Clean$PlayerName[i])
+ TotalData.Clean$PlayerName[i] <- str_trim(TotalData.Clean$PlayerName[i])
+}
+
+
+#couple last spot checks
+# For some reason one episode labelled MATT as MATTHEW sometimes....
+for (i in 1:length(TotalData.Clean$PlayerName)) {
+ if (TotalData.Clean$PlayerName[i] == "MATTHEW") {
+   TotalData.Clean$PlayerName[i] <- "MATT"
+ }
+}
+
+
+row.names(TotalData.Clean) <- NULL
+#typo in the transcript
+TotalData.Clean[204562,]$PlayerName <- "MARISHA"
+
+# Save and load options - comment out things if not needed.
+#save(TotalData.Clean,file="TotalDataClean.Rda")
+#load("TotalDataClean.Rda")
+
+#Some of the clean text was replaced, going to run text cleaning to catch those few lines.
+
+# Final Name cleaning and Text cleaning
+
+
+#gets row id for each row that needs to be cleaned
+rowIDs <- as.numeric(rownames(TotalData.Clean[(grepl("[A-Z]", TotalData.Clean$Text)),]))
+
+#Turn off warnings
+defaultW <- getOption("warn") 
+options(warn = -1) 
+
+for(i in rowIDs) {
+  
+    #Removes things in (), mostly onomatopoeia - probably not great for analysis
+    #Second line is there to remove if only line is in ()
+    TotalData.Clean$Text[i] <- gsub(pattern = "\\((.+)\\) ", replacement = "", x = TotalData.Clean$Text[i])
+    TotalData.Clean$Text[i] <- gsub(pattern = "\\((.+)\\)", replacement = "", x = TotalData.Clean$Text[i])
+  
+    #Removes "en" dash
+    TotalData.Clean$Text[i] <- str_replace(TotalData.Clean$Text[i], "–", '')
+  
+    #Removes quotation marks
+    TotalData.Clean$Text[i] <- noquote(TotalData.Clean$Text[i])
+  
+    #Removes special double quotation marks
+    TotalData.Clean$Text[i] <- gsub(pattern = "[“”]", replacement = "", x = TotalData.Clean$Text[i])
+  
+    #Replaces ♪ - these usually denote theme songs and players singing phrases
+    TotalData.Clean$Text[i] <- gsub(pattern = "♪", replacement = "", x = TotalData.Clean$Text[i])
+  
+    #Replaces "-" with a space
+    TotalData.Clean$Text[i] <- gsub(pattern = "-", replacement = " ", x = TotalData.Clean$Text[i])
+  
+    #General cleaning, to lower, remove punctuation, strip whitespace
+    documentCorp <- SimpleCorpus(VectorSource(TotalData.Clean$Text[i]))
+    textPrepFunctions <- list(tolower,
+                         removePunctuation,
+                         stripWhitespace,
+                         str_trim)
+    documentCorp <- tm_map(documentCorp, FUN = tm_reduce, tmFuns = textPrepFunctions)
+    TotalData.Clean$Text[i] <- documentCorp[1][[1]]$content
+  
+}
+
+
+#Remove rows with blank text
+TotalData.Clean <- TotalData.Clean[!(TotalData.Clean$Text==""),]
+
+row.names(TotalData.Clean) <- NULL
+
+
+#Reset warnings
+options(warn = defaultW)
+
+
+save(TotalData.Clean,file="TotalDataClean.Rda")
+
+
+
+```
+

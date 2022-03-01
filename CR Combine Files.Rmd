@@ -1,0 +1,48 @@
+---
+title: "CR Combine Files"
+output: html_notebook
+---
+
+```{r}
+load("SentimentData1.Rda")
+
+TotalSentimentData <- SentimentData
+TotalTime <- as.numeric(time1[3])
+
+load("SentimentData2.Rda")
+
+TotalSentimentData <- rbind(TotalSentimentData, SentimentData)
+TotalTime <- TotalTime + as.numeric(time1[3])
+
+
+load("SentimentData3.Rda")
+
+TotalSentimentData <- rbind(TotalSentimentData, SentimentData)
+TotalTime <- TotalTime + as.numeric(time1[3])
+
+load("SentimentData4.Rda")
+
+TotalSentimentData <- rbind(TotalSentimentData, SentimentData)
+TotalTime <- TotalTime + as.numeric(time1[3])
+
+
+load("SentimentData5.Rda")
+
+TotalSentimentData <- rbind(TotalSentimentData, SentimentData)
+TotalTime <- TotalTime + as.numeric(time1[3])
+
+load("SentimentData6.Rda")
+
+TotalSentimentData <- rbind(TotalSentimentData, SentimentData)
+TotalTime <- TotalTime + as.numeric(time1[3])
+
+
+load("TotalDataClean.Rda")
+
+
+TotalAnalyzedData <- cbind(TotalData.Clean, TotalSentimentData[ ,2:ncol(TotalSentimentData)])
+
+
+save(TotalAnalyzedData, file = "TotalAnalyzedData.Rda")
+```
+

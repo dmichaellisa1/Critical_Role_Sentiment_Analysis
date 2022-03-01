@@ -1,0 +1,275 @@
+---
+title: "Critical Role Scraping"
+output: html_notebook
+---
+
+Library Calls
+```{r}
+library(dplyr)
+library(rvest)
+library(magrittr)
+library(tidyr)
+library(stringr)
+library(tm)
+library(textstem)
+```
+
+Get Names of Episodes
+```{r}
+TitlesLink <- "https://criticalrole.fandom.com/wiki/Transcripts"
+
+TitlesRead <- read_html(TitlesLink)
+
+Titles_Text <- TitlesRead %>% 
+  html_elements(".mw-collapsible-content a:nth-child(1)") %>% 
+  html_text()
+
+#Make data frame out of text
+Titles_DF <- data.frame(Title = Titles_Text)
+
+#Clean up titles to those we want
+
+# This analysis will cover all of the main episodes up until Campaign 3: Episode 11. This code removes all specials, one-shots, and side adventures.
+# If more episodes are to be added the number will need to be adjusted to include the appropriate episodes
+Titles_DF <- data.frame(Titles_DF[1:267,])
+names(Titles_DF)[1] <- "Title"
+
+# Remove an early episode that just went over how to play D&D, not useful for this analysis
+# Was Episode 12 of Campaign 1
+Titles_DF <- data.frame(Titles_DF[!(Titles_DF$Title == "Dungeons & Dragons Campaign Tips"),])
+names(Titles_DF)[1] <- "Title"
+
+# Assign Campaign number, Episode number, & replace spaces with underscores for link grabbing
+Titles_DF$Campaign <- NA
+Titles_DF$Episode <- NA
+Titles_DF$TotalEpisodeNumber <- NA
+Titles_DF$Link <- NA
+for (i in 1:length(Titles_DF$Title)) {
+  if (i < 12) { #episodes before the tutorial (have to skip episode 12)
+    Titles_DF$Campaign[i] <- 1
+    Titles_DF$Episode[i] <- i
+    Titles_DF$TotalEpisodeNumber[i] <- i
+  }
+  if (i >= 12 & i < 115) { #The rest of campaign 1
+    Titles_DF$Campaign[i] <- 1
+    Titles_DF$Episode[i] <- i + 1
+    Titles_DF$TotalEpisodeNumber[i] <- i + 1
+  }
+  if (i >= 115 & i < 256) { #campaign 2
+    Titles_DF$Campaign[i] <- 2
+    Titles_DF$Episode[i] <- i - 114
+    Titles_DF$TotalEpisodeNumber[i] <- i + 1
+  }
+  if (i >= 256) { #campaign 3
+    Titles_DF$Campaign[i] <- 3
+    Titles_DF$Episode[i] <- i - 255
+    Titles_DF$TotalEpisodeNumber[i] <- i + 1
+  }
+  Titles_DF$Link[i] <- gsub(pattern = " ", replacement = "_", x = Titles_DF$Title[i])
+  Titles_DF$Link[i] <- test <- gsub(pattern = "\\?", replacement = "%3F", x = Titles_DF$Link[i])
+  
+}
+
+# a few titles are names of characters or things, and as such need their links adjusted
+Titles_DF$Link[78] <- "Thordak_(episode)"
+Titles_DF$Link[79] <- "Raishan_(episode)"
+Titles_DF$Link[105] <- "The_Endless_Atheneum_(episode)"
+Titles_DF$Link[106] <- "Scaldseat_(episode)"
+Titles_DF$Link[165] <- "Xhorhas_(episode)"
+Titles_DF$Link[187] <- "Uthodurn_(episode)"
+Titles_DF$Link[222] <- "Traveler_Con_(episode)"
+Titles_DF$Link[246] <- "Aeor_(episode)"
+
+```
+
+Pull Data Loop
+```{r}
+
+#Turn off warnings - this code throws out a ton of warnings
+defaultW <- getOption("warn") 
+options(warn = -1) 
+
+TotalData <- data.frame()
+
+for (EpNumber in 1:length(Titles_DF$Title)) {
+  
+  
+#Set Link to read
+#CRLink <- "https://criticalrole.fandom.com/wiki/Chasing_Nightmares/Transcript"
+CRLink <- paste("https://criticalrole.fandom.com/wiki/",Titles_DF$Link[EpNumber], "/Transcript" ,sep ="")
+
+#Read in the current Link
+CRRead <- read_html(CRLink)
+
+Player_Text <- CRRead %>% 
+  html_elements(".mw-parser-output p,h2") %>% 
+  html_text()
+
+#Make data frame out of text
+Player_Text_DF <- data.frame(complete = Player_Text)
+
+
+# Identify Show Parts
+Player_Text_DF$ShowPart <- NA
+for (i in 1 : length(Player_Text_DF$complete)) {
+  
+  # Identify Show Parts
+  if (Player_Text_DF$complete[i] == "Pre-Show") {
+    Player_Text_DF$ShowPart[i] <- "Pre-Show"}
+  if (Player_Text_DF$complete[i] == "Part I") {
+    Player_Text_DF$ShowPart[i] <- "Part 1"}
+  if (Player_Text_DF$complete[i] == "Part One") {
+    Player_Text_DF$ShowPart[i] <- "Part 1"}
+  if (Player_Text_DF$complete[i] == "Part II") {
+    Player_Text_DF$ShowPart[i] <- "Part 2"}
+  if (Player_Text_DF$complete[i] == "Part Two") {
+    Player_Text_DF$ShowPart[i] <- "Part 2"}
+  if (Player_Text_DF$complete[i] == "Break") {
+    Player_Text_DF$ShowPart[i] <- "Break"}
+  # The following two were found after the fact, included a Q&A session that caused data issues
+  if (Player_Text_DF$complete[i] == "Announcements and Break") {
+    Player_Text_DF$ShowPart[i] <- "Announcements and Break"}
+  if (Player_Text_DF$complete[i] == "Q & A Session") {
+    Player_Text_DF$ShowPart[i] <- "Q & A Session"}
+
+  # Pulls out player names
+  Player_Text_DF$PlayerName[i] <- str_extract(Player_Text_DF$complete[i], "^[^:]*")
+  
+  # Pull out text without the name attached
+  Player_Text_DF$Text[i] <- str_extract(Player_Text_DF$complete[i], "(?<=\\: ).*")
+  
+  }
+
+#fill in the show parts
+Player_Text_DF <- Player_Text_DF %>% fill(ShowPart)
+
+# Remove rows with nothing in the Text column
+Player_Text_DF <- Player_Text_DF[!(is.na(Player_Text_DF$Text)),]
+
+# Remove rows of the Break part of the show - don't care about commercials
+Player_Text_DF <- Player_Text_DF[!(Player_Text_DF$ShowPart == "Break"),]
+
+# Remove rows of the Pre-Show part of the show - don't care about commercials, announcements, and theme songs
+Player_Text_DF <- Player_Text_DF[!(Player_Text_DF$ShowPart == "Pre-Show"),]
+
+#Remove the Q&A session that was found later
+Player_Text_DF <- Player_Text_DF[!(Player_Text_DF$ShowPart == "Announcements and Break"),]
+Player_Text_DF <- Player_Text_DF[!(Player_Text_DF$ShowPart == "Q & A Session"),]
+
+# Do this to re-index df to easier tell which row is which
+row.names(Player_Text_DF) <- NULL
+
+#Remove instances of "and" names, make a second duplicate row, and attribute to both players
+r <- 1 # Need a row counter because adding rows
+for (i in 1 : length(Player_Text_DF$PlayerName)) {
+
+  # Search for "and" in playername and add a second row to attribute both players
+  if (grepl(pattern = "and", x = Player_Text_DF$PlayerName[r])) {
+    SecondPlayer <- str_extract(Player_Text_DF$PlayerName[r], "(?<=and ).*")
+    newrow <- Player_Text_DF[r,]
+    newrow$PlayerName <- SecondPlayer
+    Player_Text_DF <- rbind(Player_Text_DF[1:r,],newrow,Player_Text_DF[-(1:r),])
+    Player_Text_DF$PlayerName[r] <- str_extract(Player_Text_DF$PlayerName[r], "^([^and]+)")
+    r <- r + 2
+  } else {
+    r <- r + 1 
+    }
+}
+
+row.names(Player_Text_DF) <- NULL
+
+# Final Name cleaning and Text cleaning
+for (i in 1 : length(Player_Text_DF$PlayerName)) {
+  #Replace names with (Cont'd) or (cont'd)
+  if (grepl(pattern = "\\(", x = Player_Text_DF$PlayerName[i])) {
+    Player_Text_DF$PlayerName[i] <- str_extract(Player_Text_DF$PlayerName[i], ".*(?= \\()")
+  }
+  
+  #Removes things in (), mostly onomatopoeia - probably not great for analysis
+  #Second line is there to remove if only line is in ()
+  Player_Text_DF$Text[i] <- gsub(pattern = "\\((.+)\\) ", replacement = "", x = Player_Text_DF$Text[i])
+  Player_Text_DF$Text[i] <- gsub(pattern = "\\((.+)\\)", replacement = "", x = Player_Text_DF$Text[i])
+  
+  #Removes "en" dash
+  Player_Text_DF$Text[i] <- str_replace(Player_Text_DF$Text[i], "–", '')
+  
+  #Removes quotation marks
+  Player_Text_DF$Text[i] <- noquote(Player_Text_DF$Text[i])
+  
+  #Removes special double quotation marks
+  Player_Text_DF$Text[i] <- gsub(pattern = "[“”]", replacement = "", x = Player_Text_DF$Text[i])
+  
+  #Replaces ♪ - these usually denote theme songs and players singing phrases
+  Player_Text_DF$Text[i] <- gsub(pattern = "♪", replacement = "", x = Player_Text_DF$Text[i])
+  
+  #Replaces "-" with a space
+  Player_Text_DF$Text[i] <- gsub(pattern = "-", replacement = " ", x = Player_Text_DF$Text[i])
+  
+  #General cleaning, to lower, remove punctuation, strip whitespace
+  documentCorp <- SimpleCorpus(VectorSource(Player_Text_DF$Text[i]))
+  textPrepFunctions <- list(tolower,
+                         removePunctuation,
+                         stripWhitespace,
+                         str_trim)
+  documentCorp <- tm_map(documentCorp, FUN = tm_reduce, tmFuns = textPrepFunctions)
+  Player_Text_DF$Text[i] <- documentCorp[1][[1]]$content
+  
+  
+}
+
+#Remove rows with blank text
+Player_Text_DF <- Player_Text_DF[!(Player_Text_DF$Text==""),]
+
+row.names(Player_Text_DF) <- NULL
+
+
+# Add Campaign, Episode numbering, and titles
+Player_Text_DF$Campaign <- NA
+Player_Text_DF$Episode <- NA
+Player_Text_DF$TotalEpisodeNumber <- NA
+Player_Text_DF$EpisodeTitle <- NA
+for (i in 1:length(Player_Text_DF$Text)) {
+  Player_Text_DF$Campaign[i] <- Titles_DF$Campaign[EpNumber]
+  Player_Text_DF$Episode[i] <- Titles_DF$Episode[EpNumber]
+  Player_Text_DF$TotalEpisodeNumber[i] <- Titles_DF$TotalEpisodeNumber[EpNumber]
+  Player_Text_DF$EpisodeTitle[i] <- Titles_DF$Title[EpNumber]
+}
+
+
+# Combine to one dataframe
+TotalData <- rbind(TotalData, Player_Text_DF)
+}
+
+#Reset warnings
+options(warn = defaultW)
+
+
+#testing zone
+
+#in scraping loop or after:
+ 
+  #column of most likely character, i.e. Travis as Grog/Fjord, Matt as DM
+```
+
+Add in Most Likely character
+```{r}
+# Identify Most Likely Character
+
+#TotalData$LikelyCharacter <- NA
+#for (i in 1:length(Player_Text_DF$Episode)){
+  
+#}
+```
+
+
+```{r}
+save(TotalData,file="TotalData.Rda")
+```
+
+
+```{r}
+#testing stuff
+
+#purrr::map_df()
+```
+

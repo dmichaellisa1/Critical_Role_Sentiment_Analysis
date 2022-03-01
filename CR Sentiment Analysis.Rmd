@@ -1,0 +1,199 @@
+---
+title: "CR Sentiment Analysis"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+library(sentimentr)
+library(lexicon)
+library(magrittr)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(lubridate)
+library(tm)
+library(stringr)
+library(textstem)
+library(tidyr)
+library(furrr)
+library(future)
+```
+
+
+```{r}
+load("TotalDataClean.Rda")
+```
+
+
+```{r}
+#Parallize for speed
+plan(multisession, workers = parallel::detectCores() - 1)
+
+defaultW <- getOption("warn") 
+options(warn = -1) 
+
+#pre-initialize some things for speed
+#EmotionsDF <- data.frame(trust = 0, fear = 0, negative = 0, sadness = 0, anger = 0, surprise = 0, positive = 0, disgust = 0, joy = 0, anticipation = 0)
+
+#ProfanityDF <- data.frame(profanity = 0)
+
+ProfanityZacAnger <- data.frame(word = lexicon::profanity_zac_anger, profanity = "profanity")
+
+#set a timer to see how long it takes
+t1 <- proc.time()
+
+#Begin Sentiment analysis
+SentimentData <- future_map_dfr(400001:nrow(TotalData.Clean), ~{
+                              #1:nrow(TotalData.Clean)
+                              #1:80000
+                              #80001:160000
+                              #160001:240000
+                              #240001:320000
+                              #320001:400000
+  
+  #Jocker Sentiment for whole phrase using valence
+  jock <- sentiment(TotalData.Clean$Text[.x], polarity_dt = lexicon::hash_sentiment_jockers)
+  
+  
+  #NRC Emotions
+  tokens <- tibble(text = TotalData.Clean$Text[.x]) %>% 
+  unnest_tokens(tbl = ., output = word, input = text)
+  
+  EmotionsValues <- tokens %>%
+  left_join(lexicon::nrc_emotions, by = c("word" = "term")) 
+  
+  EmotionsValues[is.na(EmotionsValues)] <- 0
+  
+  EmotionsValues <- as.data.frame(t(colSums(EmotionsValues[, -1])))
+  
+  
+  trust <- tryCatch(
+    {EmotionsValues$trust
+    }, 
+    error = function(e) {
+      return(0)
+    })
+  
+  fear <- tryCatch(
+    {EmotionsValues$fear}, 
+    error = function(e) {
+      return(0)
+    })
+  
+ # negative <- tryCatch(
+ #   {EmotionsValues$negative}, 
+ #   error = function(e) {
+ #     return(0)
+ #   })
+  
+  sadness <- tryCatch(
+    {EmotionsValues$sadness}, 
+    error = function(e) {
+      return(0)
+    })
+  #try(anger <- EmotionsValues$anger, silent = TRUE)
+  anger <- tryCatch(
+    {EmotionsValues$anger}, 
+    error = function(e) {
+      return(0)
+    })
+  #try(surprise <- EmotionsValues$surprise, silent = TRUE)
+  surprise <- tryCatch(
+    {EmotionsValues$surprise}, 
+    error = function(e) {
+      return(0)
+    })
+  #try(positive <- EmotionsValues$positive, silent = TRUE)
+  #positive <- tryCatch(
+  #  {EmotionsValues$positive}, 
+  #  error = function(e) {
+  #    return(0)
+  #  })
+  
+  #try(disgust <- EmotionsValues$disgust, silent = TRUE)
+  disgust <- tryCatch(
+    {EmotionsValues$disgust}, 
+    error = function(e) {
+      return(0)
+    })
+  #try(joy <- EmotionsValues$joy, silent = TRUE)
+  joy <- tryCatch(
+    {EmotionsValues$joy}, 
+    error = function(e) {
+      return(0)
+    })
+   #try(anticipation <- EmotionsValues$anticipation, silent = TRUE)
+  anticipation <- tryCatch(
+    {EmotionsValues$anticipation}, 
+    error = function(e) {
+      return(0)
+    })
+  
+  #Profanity Zack Anger
+  ProfanityValues <- tokens %>%
+    inner_join(ProfanityZacAnger, by = "word") %>% 
+    count(profanity) %>% 
+    spread(profanity, n, fill = 0)
+  
+  #try(profanity <- ProfanityValues$profanity, silent = TRUE)
+  
+  if(is.null(ProfanityValues$profanity) == FALSE) {
+    profanity <- ProfanityValues$profanity
+  } else profanity <- 0
+  
+  data.frame(Text = TotalData.Clean$Text[.x],
+             WordCount = jock$word_count,
+             JockSent = jock$sentiment,
+             trust = trust,
+             fear = fear,
+             #negative = negative,
+             sadness = sadness,
+             anger = anger,
+             surprise = surprise,
+             #positive = positive,
+             disgust = disgust,
+             joy = joy,
+             anticipation = anticipation,
+             profanity = profanity
+  )
+})
+
+time1 <- proc.time() - t1
+
+options(warn = defaultW)
+
+#time1 #testing time, this should take about 2 hours to run
+
+
+save(SentimentData, time1, file = "SentimentData6.Rda")
+
+
+
+
+# testing non-parallel, this takes significantly longer and is just for the jockers
+# t2 <- proc.time()
+# JockSentimentNoPar <- purrr::map_dfr(TotalData.Clean[1:1000,]$Text, ~{
+#   
+#   jock <- sentiment(.x,, polarity_dt = lexicon::hash_sentiment_jockers)
+#   
+#   data.frame(Text = .x,
+#              JockSent = jock$sentiment
+#              )
+#   })
+# time2 <- proc.time() - t2
+# time2 #seems to take around 4x the time
+
+```
+
+```{r}
+AnalyzedData <- cbind(TotalData.Clean, SentimentData[ ,2:ncol(SentimentData)])
+
+
+#fix this for what I'm interested in. Probably put this in another code
+CallSentiment.Total.Jock <- wweCalls.Jock %>% group_by(date) %>% 
+  summarise(TotalJockersSentiment = sum(JockersSentiment)) %>% 
+  arrange(date)
+```
+
